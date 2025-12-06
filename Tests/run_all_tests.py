@@ -187,6 +187,22 @@ def test_advection_exact_match():
     return True
 
 
+def test_precision_diffusion():
+    """Quick: Compare diffusion in f32 vs f64."""
+    from Tests.test_precision import test_diffusion_precision
+    passed, _ = test_diffusion_precision(N=30, steps=50, verbose=False)
+    assert passed, "Precision test failed (f32 vs f64)"
+    return True
+
+
+def test_precision_advection():
+    """Quick: Compare advection in f32 vs f64."""
+    from Tests.test_precision import test_advection_precision
+    passed, _ = test_advection_precision(N=30, steps=50, verbose=False)
+    assert passed, "Precision test failed (f32 vs f64)"
+    return True
+
+
 # Test definitions: (name, function, is_quick)
 ALL_TESTS = [
     ("Reference files exist", test_references, True),
@@ -194,6 +210,8 @@ ALL_TESTS = [
     ("Advection Framework interface", test_advection_framework, True),
     ("Diffusion restart exactness", test_diffusion_restart, True),
     ("Advection restart exactness", test_advection_restart, True),
+    ("Diffusion precision (f32 vs f64)", test_precision_diffusion, True),
+    ("Advection precision (f32 vs f64)", test_precision_advection, True),
     ("Diffusion exact match (N=120, 30 days)", test_diffusion_exact_match, False),
     ("Advection exact match (N=120, 12 days)", test_advection_exact_match, False),
 ]

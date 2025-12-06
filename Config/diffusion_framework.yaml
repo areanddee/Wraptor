@@ -4,7 +4,21 @@
 solver:
   type: fv_cubesphere_diffusion
   N: 60                # Grid resolution (N×N per face)
-  kappa: 5.0e5         # Diffusion coefficient [m²/s]
+  kappa: 5.0e+5         # Diffusion coefficient [m²/s]
+  precision: 'f64'     # 'f32' or 'f64' for solver arrays
+
+# Physical parameters (SINGLE SOURCE OF TRUTH)
+physics:
+  R_sphere: 6.371e+6   # Planet radius [m]
+  gravity: 9.81        # Surface gravity [m/s²]
+  omega: 7.292e-5      # Rotation rate [rad/s]
+  name: Earth
+
+# Initial condition
+initial_condition:
+  type: lima_flag
+  T_hot: 600.0         # Hot quadrant temperature [K]
+  T_background: 1.0    # Background temperature [K]
 
 parallelization:
   enable_sharding: false    # Set true for multi-device

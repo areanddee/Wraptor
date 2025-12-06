@@ -13,6 +13,11 @@ Key features:
 - Demonstrates cross-face connectivity
 
 Physics: ∂T/∂t = κ ∇²T on the sphere
+
+Refactored to use:
+- geometry.CubedSphereGeometry for grid/metric
+- physics.PlanetParams for physical constants
+- initial_conditions for IC patterns
 """
 
 import jax
@@ -33,6 +38,11 @@ sys.path.insert(0, os.path.dirname(__file__))  # For halo_exchange
 
 from Framework.solver_interface import NumericalSolver
 
+# Import new modular components
+from Solvers.geometry import CubedSphereGeometry
+from Solvers.physics import PlanetParams, EARTH
+from Solvers.initial_conditions import lima_flag
+
 # Import optimized halo exchange (same directory)
 from halo_exchange import (
     create_communication_schedule,
@@ -40,13 +50,6 @@ from halo_exchange import (
     exchange_scalar_halos_v2,
     extend_to_include_ghosts
 )
-
-
-# ============================================================================
-# CONSTANTS
-# ============================================================================
-
-R_SPHERE = 6.371e6  # [m] Earth radius
 
 
 # ============================================================================
@@ -62,11 +65,14 @@ class DiffusionState:
 
 
 # ============================================================================
-# GEOMETRY (consistent with fv_plr_cubesphere_adv.py)
+# GEOMETRY (LEGACY - kept for backward compatibility, use geometry module)
 # ============================================================================
 
-def equiangular_to_xyz_face(xi1, xi2, face_id, R=R_SPHERE):
-    """Map equiangular (ξ¹, ξ²) to Cartesian (X, Y, Z)."""
+def equiangular_to_xyz_face(xi1, xi2, face_id, R=6.371e6):
+    """Map equiangular (ξ¹, ξ²) to Cartesian (X, Y, Z).
+    
+    LEGACY: Use Solvers.geometry.CubedSphereGeometry for new code.
+    """
     tan_xi1 = jnp.tan(xi1)
     tan_xi2 = jnp.tan(xi2)
     delta = jnp.sqrt(1.0 + tan_xi1**2 + tan_xi2**2)
@@ -87,8 +93,12 @@ def equiangular_to_xyz_face(xi1, xi2, face_id, R=R_SPHERE):
     return X, Y, Z
 
 
-def compute_metric_face(xi1, xi2, R=R_SPHERE):
-    """Compute √G for given face."""
+def compute_metric_face(xi1, xi2, R=1.0):
+    """Compute √G for given face.
+    
+    LEGACY: Use Solvers.geometry.CubedSphereGeometry for new code.
+    Note: Now defaults to R=1.0 (unit sphere). Scale result by R² if needed.
+    """
     tan_x1 = jnp.tan(xi1)
     tan_x2 = jnp.tan(xi2)
     cos_x1 = jnp.cos(xi1)
@@ -99,40 +109,10 @@ def compute_metric_face(xi1, xi2, R=R_SPHERE):
 
 
 # ============================================================================
-# INITIAL CONDITIONS
-# ============================================================================
-
-def initialize_quadrant_temperature(N, T_hot=600.0, T_background=1.0):
-    """
-    Lima Flag pattern: Quadrants on Face 0.
-    
-    Face 0 (north pole):
-      - Upper-left and lower-right quadrants: T_hot (600K)
-      - Upper-right and lower-left quadrants: T_background (1K)
-    All other faces: T_background (1K)
-    
-    Returns:
-        T_all: (6, N, N) temperature field (interior only)
-    """
-    # Initialize everything to background temperature (1K, not 0K)
-    T_all = jnp.ones((6, N, N)) * T_background
-    
-    half_N = N // 2
-    
-    # Upper-left quadrant (i < N/2, j < N/2)
-    T_all = T_all.at[0, :half_N, :half_N].set(T_hot)
-    
-    # Lower-right quadrant (i >= N/2, j >= N/2)
-    T_all = T_all.at[0, half_N:, half_N:].set(T_hot)
-    
-    return T_all
-
-
-# ============================================================================
 # DIFFUSION OPERATOR
 # ============================================================================
 
-def compute_diffusion_rhs(T_ghosts, sqrtG_interior, kappa, dx, N):
+def compute_diffusion_rhs(T_ghosts, sqrtG_interior, kappa, dx, N, R_sphere=6.371e6):
     """
     Compute RHS of diffusion equation using ghost cells.
     
@@ -148,6 +128,7 @@ def compute_diffusion_rhs(T_ghosts, sqrtG_interior, kappa, dx, N):
         kappa: Diffusion coefficient [m²/s]
         dx: Grid spacing [radians]
         N: Interior resolution
+        R_sphere: Planet radius [m] (default: Earth)
         
     Returns:
         rhs: (6, N, N) tendency ∂T/∂t on interior [K/s]
@@ -155,7 +136,7 @@ def compute_diffusion_rhs(T_ghosts, sqrtG_interior, kappa, dx, N):
     rhs_all = jnp.zeros((6, N, N))
     
     # Convert dx from radians to meters for physical diffusion
-    dx_physical = dx * R_SPHERE
+    dx_physical = dx * R_sphere
     
     for face in range(6):
         T = T_ghosts[face]  # (N+2, N+2)
@@ -183,7 +164,7 @@ def compute_diffusion_rhs(T_ghosts, sqrtG_interior, kappa, dx, N):
 
 def euler_step_compiled(state: DiffusionState, dx: float, dt: float, kappa: float,
                        N: int, sqrtG_all: jax.Array, 
-                       halo_exchange_fn) -> DiffusionState:
+                       halo_exchange_fn, R_sphere: float = 6.371e6) -> DiffusionState:
     """
     Single forward Euler timestep - JIT compiled.
     
@@ -195,6 +176,7 @@ def euler_step_compiled(state: DiffusionState, dx: float, dt: float, kappa: floa
         N: Grid resolution
         sqrtG_all: (6, N, N) metric
         halo_exchange_fn: Pre-compiled halo exchange function
+        R_sphere: Planet radius [m]
         
     Returns:
         new_state: Updated state
@@ -203,7 +185,7 @@ def euler_step_compiled(state: DiffusionState, dx: float, dt: float, kappa: floa
     T_ghosts = exchange_scalar_halos_v2(state.T, N, halo_exchange_fn)
     
     # Compute RHS
-    rhs = compute_diffusion_rhs(T_ghosts, sqrtG_all, kappa, dx, N)
+    rhs = compute_diffusion_rhs(T_ghosts, sqrtG_all, kappa, dx, N, R_sphere)
     
     # Update temperature
     T_new = state.T + dt * rhs
@@ -238,7 +220,6 @@ class CubedSphereDiffusion(NumericalSolver):
             config_file: Path to YAML config (for parallelization settings)
         """
         self.N = N
-        self.dx = jnp.pi / (2 * N)
         self.kappa = float(kappa)  # Ensure kappa is float (may come from YAML as string)
         
         # Load config if provided
@@ -252,15 +233,23 @@ class CubedSphereDiffusion(NumericalSolver):
             if config_file:
                 print(f"⚠ Config not found: {config_file}, using defaults")
         
+        # Create geometry (unit sphere, always f64)
+        self.geometry = CubedSphereGeometry.create(N)
+        self.dx = self.geometry.dx
+        
+        # Get planet parameters from config (SINGLE SOURCE OF TRUTH)
+        self.planet = PlanetParams.from_config(self.config)
+        
         # Setup grid
         print(f"\nSolver configuration:")
         print(f"  Grid: {N}×{N} per face (6 faces, {6*N*N} total cells)")
         print(f"  Method: Forward Euler diffusion")
-        print(f"  dx: {self.dx:.6f} rad ({self.dx*R_SPHERE/1e3:.1f} km)")
+        print(f"  dx: {self.dx:.6f} rad ({self.dx * self.planet.R_sphere / 1e3:.1f} km)")
         print(f"  κ (diffusivity): {self.kappa:.2e} m²/s")
+        print(f"  Planet: {self.planet.name} (R={self.planet.R_sphere/1e6:.3f}×10⁶ m)")
         
         # Compute timestep constraint
-        dx_physical = self.dx * R_SPHERE
+        dx_physical = self.dx * self.planet.R_sphere
         dt_cfl_max = 0.25 * dx_physical**2 / self.kappa
         print(f"  dt_max (CFL): {dt_cfl_max:.1f} s ({dt_cfl_max/60:.1f} min)")
         
@@ -351,31 +340,27 @@ class CubedSphereDiffusion(NumericalSolver):
         print(f"{'='*70}\n")
     
     def setup_geometry(self):
-        """Pre-compute metric arrays."""
-        xi1_1d = jnp.linspace(-jnp.pi/4, jnp.pi/4, self.N)
-        xi2_1d = jnp.linspace(-jnp.pi/4, jnp.pi/4, self.N)
-        XI1, XI2 = jnp.meshgrid(xi1_1d, xi2_1d, indexing='ij')
-        
-        self.sqrtG_all = jnp.zeros((6, self.N, self.N))
-        
-        for face in range(6):
-            sqrtG = compute_metric_face(XI1, XI2)
-            self.sqrtG_all = self.sqrtG_all.at[face].set(sqrtG)
+        """Pre-compute metric arrays from geometry module."""
+        # Use geometry module's sqrtG (computed on unit sphere, f64)
+        # Scale by R² for physical metric
+        R = self.planet.R_sphere
+        self.sqrtG_all = jnp.array(self.geometry.sqrtG) * R**2
     
-    def initialize(self, pattern='quadrant', T_hot=600.0) -> DiffusionState:
+    def initialize(self, pattern='quadrant', T_hot=600.0, T_background=1.0) -> DiffusionState:
         """
         Initialize state.
         
         Args:
             pattern: 'quadrant' (Lima Flag on Face 0)
             T_hot: Hot temperature [K]
+            T_background: Background temperature [K]
         """
-        # Initial condition
+        # Use IC module for Lima Flag pattern
         if pattern == 'quadrant':
-            T_all = initialize_quadrant_temperature(self.N, T_hot)
+            T_all = lima_flag(self.geometry, T_hot=T_hot, T_background=T_background)
             print(f"\nInitial condition: Lima Flag quadrant pattern")
             print(f"  Face 0 (north pole): Upper-left & lower-right at {T_hot}K")
-            print(f"  All other faces: 0K")
+            print(f"  All other faces: {T_background}K")
         else:
             raise ValueError(f"Unknown pattern: {pattern}")
         
@@ -388,7 +373,8 @@ class CubedSphereDiffusion(NumericalSolver):
     def step(self, state: DiffusionState, dt: float) -> DiffusionState:
         """Advance one timestep."""
         return euler_step_compiled(state, self.dx, dt, self.kappa, self.N,
-                                  self.sqrtG_all, self.halo_exchange_fn)
+                                  self.sqrtG_all, self.halo_exchange_fn,
+                                  self.planet.R_sphere)
     
     def get_diagnostics(self, state: DiffusionState) -> Dict[str, float]:
         """Compute diagnostics."""
@@ -524,7 +510,7 @@ def run_standalone_test(N=30, days=30.0, kappa=5e5, config_file=None):
     n_steps = int(total_time / dt)
     
     # Check CFL stability
-    dx_physical = solver.dx * R_SPHERE
+    dx_physical = solver.dx * solver.planet.R_sphere
     dt_cfl_max = 0.25 * dx_physical**2 / kappa
     cfl_number = dt / dt_cfl_max
     

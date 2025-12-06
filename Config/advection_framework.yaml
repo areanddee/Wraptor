@@ -4,6 +4,29 @@
 solver:
   type: fv_plr_cubesphere_adv
   N: 60                # Grid resolution (N×N per face)
+  precision: 'f64'     # 'f32' or 'f64' for solver arrays
+
+# Physical parameters (SINGLE SOURCE OF TRUTH)
+physics:
+  R_sphere: 6.371e6    # Planet radius [m]
+  gravity: 9.81        # Surface gravity [m/s²]
+  omega: 7.292e-5      # Rotation rate [rad/s]
+  name: Earth
+
+# Initial condition
+initial_condition:
+  type: cosine_bell
+  amplitude: 1000.0    # Peak tracer value
+  background: 0.0      # Background value
+  center_lat: 0.0      # Bell center latitude [rad]
+  center_lon: -1.5708  # Bell center longitude [rad] (-π/2 = 90°W)
+  radius_fraction: 0.333  # Bell radius as fraction of R_sphere
+
+# Velocity field
+velocity_field:
+  type: solid_body_rotation
+  rotation_period_days: 12.0  # Full rotation period [days]
+  alpha: 0.0           # Tilt angle [rad] (0 = polar rotation)
 
 parallelization:
   enable_sharding: false    # Set true for multi-device

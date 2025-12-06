@@ -14,6 +14,11 @@ Key features:
 - Williamson et al. (1992) Test Case 1: Solid body rotation
 
 Physics: ∂q/∂t + ∇·(q V) = 0 on the sphere
+
+Refactored to use:
+- geometry.CubedSphereGeometry for grid/metric
+- physics.PlanetParams for physical constants
+- initial_conditions for IC patterns and velocity fields
 """
 
 import jax
@@ -34,6 +39,11 @@ sys.path.insert(0, os.path.dirname(__file__))  # For halo_exchange
 
 from Framework.solver_interface import NumericalSolver
 
+# Import new modular components
+from Solvers.geometry import CubedSphereGeometry
+from Solvers.physics import PlanetParams, EARTH
+from Solvers.initial_conditions import cosine_bell, solid_body_rotation
+
 # Import halo exchange (same directory)
 from halo_exchange import (
     create_communication_schedule,
@@ -41,13 +51,6 @@ from halo_exchange import (
     exchange_scalar_halos_v2,
     extend_to_include_ghosts
 )
-
-
-# ============================================================================
-# CONSTANTS
-# ============================================================================
-
-R_SPHERE = 6.371e6  # [m] Earth radius
 
 
 # ============================================================================
@@ -66,11 +69,14 @@ class AdvectionState:
 
 
 # ============================================================================
-# COORDINATE TRANSFORMATIONS (from test_cosine_bell_cartesian_velocity.py)
+# COORDINATE TRANSFORMATIONS (LEGACY - use geometry module for new code)
 # ============================================================================
 
-def equiangular_to_xyz_face(xi1, xi2, face_id, R=R_SPHERE):
-    """Map equiangular (ξ¹, ξ²) to Cartesian (X, Y, Z)."""
+def equiangular_to_xyz_face(xi1, xi2, face_id, R=6.371e6):
+    """Map equiangular (ξ¹, ξ²) to Cartesian (X, Y, Z).
+    
+    LEGACY: Use Solvers.geometry.CubedSphereGeometry for new code.
+    """
     tan_xi1 = jnp.tan(xi1)
     tan_xi2 = jnp.tan(xi2)
     delta = jnp.sqrt(1.0 + tan_xi1**2 + tan_xi2**2)
@@ -91,14 +97,19 @@ def equiangular_to_xyz_face(xi1, xi2, face_id, R=R_SPHERE):
     return X, Y, Z
 
 
-def xyz_to_lonlat(X, Y, Z):
-    """Convert Cartesian to (lon, lat)."""
+def xyz_to_lonlat(X, Y, Z, R=1.0):
+    """Convert Cartesian to (lon, lat).
+    
+    Note: For unit sphere, R=1.0. For physical coords, pass R_sphere.
+    """
     lon = jnp.arctan2(Y, X)
-    lat = jnp.arcsin(Z / R_SPHERE)
+    # Use magnitude of position vector for latitude calculation
+    r = jnp.sqrt(X**2 + Y**2 + Z**2)
+    lat = jnp.arcsin(Z / r)
     return lon, lat
 
 
-def compute_jacobian_face(xi1, xi2, face_id, R=R_SPHERE):
+def compute_jacobian_face(xi1, xi2, face_id, R=6.371e6):
     """Compute Jacobian for given face."""
     tan_x1, tan_x2 = jnp.tan(xi1), jnp.tan(xi2)
     sec2_x1, sec2_x2 = 1.0 / jnp.cos(xi1)**2, 1.0 / jnp.cos(xi2)**2
@@ -163,8 +174,12 @@ def cartesian_to_contravariant(V_x, V_y, V_z, xi1, xi2, face_id):
     return u1, u2
 
 
-def compute_metric_face(xi1, xi2, R=R_SPHERE):
-    """Compute √G."""
+def compute_metric_face(xi1, xi2, R=1.0):
+    """Compute √G.
+    
+    LEGACY: Use Solvers.geometry.CubedSphereGeometry for new code.
+    Note: Now defaults to R=1.0 (unit sphere). Scale result by R² if needed.
+    """
     tan_x1, tan_x2 = jnp.tan(xi1), jnp.tan(xi2)
     cos_x1, cos_x2 = jnp.cos(xi1), jnp.cos(xi2)
     delta = jnp.sqrt(1.0 + tan_x1**2 + tan_x2**2)
@@ -172,20 +187,26 @@ def compute_metric_face(xi1, xi2, R=R_SPHERE):
 
 
 # ============================================================================
-# INITIAL CONDITIONS
+# INITIAL CONDITIONS (LEGACY - use initial_conditions module for new code)
 # ============================================================================
 
-def great_circle_distance(lon1, lat1, lon2, lat2, R=R_SPHERE):
-    """Great circle distance."""
+def great_circle_distance(lon1, lat1, lon2, lat2, R=6.371e6):
+    """Great circle distance.
+    
+    LEGACY: Use Solvers.initial_conditions.cosine_bell for new code.
+    """
     dlon, dlat = lon2 - lon1, lat2 - lat1
     a = jnp.sin(dlat/2)**2 + jnp.cos(lat1) * jnp.cos(lat2) * jnp.sin(dlon/2)**2
     return R * 2 * jnp.arcsin(jnp.sqrt(a))
 
 
-def cosine_bell(lon, lat, lon_c, lat_c, h0=1000.0):
-    """Cosine bell (Williamson et al. 1994)."""
-    r = great_circle_distance(lon, lat, lon_c, lat_c)
-    r_bell = R_SPHERE / 3.0
+def cosine_bell_legacy(lon, lat, lon_c, lat_c, h0=1000.0, R_sphere=6.371e6):
+    """Cosine bell (Williamson et al. 1994).
+    
+    LEGACY: Use Solvers.initial_conditions.cosine_bell for new code.
+    """
+    r = great_circle_distance(lon, lat, lon_c, lat_c, R=R_sphere)
+    r_bell = R_sphere / 3.0
     return jnp.where(r < r_bell,
                      h0 * 0.5 * (1.0 + jnp.cos(jnp.pi * r / r_bell)),
                      0.0)
@@ -458,7 +479,6 @@ class PLRCubeSphereAdvection(NumericalSolver):
             config_file: Path to YAML config (for parallelization settings)
         """
         self.N = N
-        self.dx = jnp.pi / (2 * N)
         
         # Load config if provided
         if config_file and os.path.exists(config_file):
@@ -471,11 +491,19 @@ class PLRCubeSphereAdvection(NumericalSolver):
             if config_file:
                 print(f"⚠ Config not found: {config_file}, using defaults")
         
+        # Create geometry (unit sphere, always f64)
+        self.geometry = CubedSphereGeometry.create(N)
+        self.dx = self.geometry.dx
+        
+        # Get planet parameters from config (SINGLE SOURCE OF TRUTH)
+        self.planet = PlanetParams.from_config(self.config)
+        
         # Setup grid
         print(f"\nSolver configuration:")
         print(f"  Grid: {N}×{N} per face (6 faces, {6*N*N} total cells)")
         print(f"  Method: PLR (2nd-order) with MC limiter")
-        print(f"  dx: {self.dx:.6f} rad ({self.dx*R_SPHERE/1e3:.1f} km)")
+        print(f"  dx: {self.dx:.6f} rad ({self.dx * self.planet.R_sphere / 1e3:.1f} km)")
+        print(f"  Planet: {self.planet.name} (R={self.planet.R_sphere/1e6:.3f}×10⁶ m)")
         
         # Create halo exchange with functools.partial + JIT
         print(f"\nCompiling halo exchange (functools.partial + JIT)...")
@@ -564,19 +592,19 @@ class PLRCubeSphereAdvection(NumericalSolver):
         print(f"{'='*70}\n")
     
     def setup_geometry(self):
-        """Pre-compute coordinate and metric arrays."""
-        xi1_1d = jnp.linspace(-jnp.pi/4, jnp.pi/4, self.N)
-        xi2_1d = jnp.linspace(-jnp.pi/4, jnp.pi/4, self.N)
-        XI1, XI2 = jnp.meshgrid(xi1_1d, xi2_1d, indexing='ij')
+        """Pre-compute coordinate and metric arrays from geometry module."""
+        # Use geometry module (unit sphere, f64) and scale by R² for physical metric
+        R = self.planet.R_sphere
         
-        self.XI1_all = jnp.zeros((6, self.N, self.N))
-        self.XI2_all = jnp.zeros((6, self.N, self.N))
-        self.sqrtG_all = jnp.zeros((6, self.N, self.N))
+        # Broadcast coordinates to all faces (same on each face)
+        XI1 = jnp.array(self.geometry.XI1)
+        XI2 = jnp.array(self.geometry.XI2)
         
-        for face in range(6):
-            self.XI1_all = self.XI1_all.at[face].set(XI1)
-            self.XI2_all = self.XI2_all.at[face].set(XI2)
-            self.sqrtG_all = self.sqrtG_all.at[face].set(compute_metric_face(XI1, XI2))
+        self.XI1_all = jnp.broadcast_to(XI1, (6, self.N, self.N))
+        self.XI2_all = jnp.broadcast_to(XI2, (6, self.N, self.N))
+        
+        # sqrtG from geometry (unit sphere) scaled by R²
+        self.sqrtG_all = jnp.array(self.geometry.sqrtG) * R**2
         
         # Apply sharding if enabled
         if self.sharding is not None:
@@ -584,41 +612,36 @@ class PLRCubeSphereAdvection(NumericalSolver):
             self.XI2_all = jax.device_put(self.XI2_all, self.sharding)
             self.sqrtG_all = jax.device_put(self.sqrtG_all, self.sharding)
     
-    def initialize(self, test_case='cosine_bell', u0=None) -> AdvectionState:
+    def initialize(self, test_case='cosine_bell', u0=None, 
+                   rotation_period_days=12.0) -> AdvectionState:
         """
-        Initialize state.
+        Initialize state using IC modules.
         
         Args:
             test_case: 'cosine_bell' (default)
-            u0: Wind speed at equator [m/s]. If None, uses 12-day rotation period.
+            u0: Wind speed at equator [m/s]. If None, uses rotation_period_days.
+            rotation_period_days: Rotation period [days] (default: 12)
         """
-        # Initial condition
+        # Initial condition from IC module
         if test_case == 'cosine_bell':
-            q_all = initialize_cosine_bell(self.N)
+            q_all = cosine_bell(self.geometry, self.planet, amplitude=1000.0)
+            print(f"\nInitial condition: Cosine Bell (Williamson Test 1)")
         else:
             raise ValueError(f"Unknown test case: {test_case}")
         
-        # Velocity field
+        # Velocity field from IC module
+        Vx_all, Vy_all, Vz_all = solid_body_rotation(
+            self.geometry, self.planet, 
+            rotation_period_days=rotation_period_days
+        )
+        
+        # Compute u0 for logging
         if u0 is None:
-            rotation_period_days = 12.0
-            u0 = 2.0 * jnp.pi * R_SPHERE / (rotation_period_days * 86400.0)
-            print(f"\nVelocity field: Solid body rotation")
-            print(f"  Rotation period: {rotation_period_days} days")
-            print(f"  u0 at equator: {u0:.2f} m/s")
+            u0 = 2.0 * jnp.pi * self.planet.R_sphere / (rotation_period_days * 86400.0)
         
-        Vx_all = jnp.zeros((6, self.N, self.N))
-        Vy_all = jnp.zeros((6, self.N, self.N))
-        Vz_all = jnp.zeros((6, self.N, self.N))
-        
-        xi1_1d = jnp.linspace(-jnp.pi/4, jnp.pi/4, self.N)
-        xi2_1d = jnp.linspace(-jnp.pi/4, jnp.pi/4, self.N)
-        XI1, XI2 = jnp.meshgrid(xi1_1d, xi2_1d, indexing='ij')
-        
-        for face in range(6):
-            Vx, Vy, Vz = solid_body_rotation_velocity(XI1, XI2, face, u0)
-            Vx_all = Vx_all.at[face].set(Vx)
-            Vy_all = Vy_all.at[face].set(Vy)
-            Vz_all = Vz_all.at[face].set(Vz)
+        print(f"\nVelocity field: Solid body rotation")
+        print(f"  Rotation period: {rotation_period_days} days")
+        print(f"  u0 at equator: {float(u0):.2f} m/s")
         
         # Apply sharding if enabled
         if self.sharding is not None:
@@ -759,7 +782,7 @@ def run_standalone_test(N=60, T_days=2.0, config_file=None):
     V_mag = jnp.sqrt(state.Vx**2 + state.Vy**2 + state.Vz**2)
     V_max = float(jnp.max(V_mag))
     target_cfl = 0.5
-    dt = target_cfl * (solver.dx * R_SPHERE) / V_max
+    dt = target_cfl * (solver.dx * solver.planet.R_sphere) / V_max
     n_steps = int(T_days * 86400 / dt)
     
     print(f"\nTime integration:")
