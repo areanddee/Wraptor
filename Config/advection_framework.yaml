@@ -1,0 +1,33 @@
+# Configuration for PLR Cubed-Sphere Advection Solver
+# Complete config for Framework execution
+
+solver:
+  type: fv_plr_cubesphere_adv
+  N: 60                # Grid resolution (N×N per face)
+
+parallelization:
+  enable_sharding: false    # Set true for multi-device
+  tiles_per_edge: 1         # Tiles per cube edge (1 = 6 tiles total)
+                            # Currently ONLY tiles_per_edge=1 is supported
+  device_type: 'cpu'        # 'cpu' or 'gpu'
+  num_devices: 1            # Number of devices (must evenly divide num_tiles)
+                            # Valid for tiles_per_edge=1: 1, 2, 3, 6 devices
+
+time_integration:
+  dt: 1080                  # Timestep [s] (~18 minutes, CFL~0.5)
+  num_steps: 480            # Total steps (~6 days)
+
+io:
+  output_dir: ./output_advection
+  checkpoint_dir: ./checkpoints_advection
+  output:
+    state:
+      frequency: 40         # Save every 40 steps (~0.5 days)
+      enabled: true
+    diagnostics:
+      frequency: 10         # Save every 10 steps
+      enabled: true
+  checkpoint_frequency: 100 # Checkpoint every 100 steps (~1.25 days)
+  diagnostic_frequency: 20  # Print diagnostics every 20 steps
+  max_checkpoints: 3
+

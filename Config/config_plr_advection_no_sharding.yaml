@@ -1,0 +1,11 @@
+# Configuration for PLR Cubed-Sphere Advection (NO SHARDING)
+# Optimized for single-device execution (fastest on 1 GPU/CPU)
+
+solver:
+  type: 'fv_plr_cubesphere_adv'
+
+parallelization:
+  enable_sharding: false  # Disable JAX Mesh sharding overhead
+  tiles_per_edge: 1       # Not used when sharding disabled, but kept for consistency
+  # device_type and num_devices are ignored when sharding is disabled
+

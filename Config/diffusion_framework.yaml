@@ -1,0 +1,34 @@
+# Configuration for Cubed-Sphere Thermal Diffusion Solver
+# Complete config for Framework execution
+
+solver:
+  type: fv_cubesphere_diffusion
+  N: 60                # Grid resolution (N×N per face)
+  kappa: 5.0e5         # Diffusion coefficient [m²/s]
+
+parallelization:
+  enable_sharding: false    # Set true for multi-device
+  tiles_per_edge: 1         # Tiles per cube edge (1 = 6 tiles total)
+                            # Currently ONLY tiles_per_edge=1 is supported
+  device_type: 'cpu'        # 'cpu' or 'gpu'
+  num_devices: 1            # Number of devices (must evenly divide num_tiles)
+                            # Valid for tiles_per_edge=1: 1, 2, 3, 6 devices
+
+time_integration:
+  dt: 1800                  # Timestep [s] (30 minutes)
+  num_steps: 48             # Total steps (1 day simulation)
+
+io:
+  output_dir: ./output_diffusion
+  checkpoint_dir: ./checkpoints_diffusion
+  output:
+    state:
+      frequency: 12         # Save every 12 steps (6 hours)
+      enabled: true
+    diagnostics:
+      frequency: 1          # Save every step
+      enabled: true
+  checkpoint_frequency: 24  # Checkpoint every 24 steps (12 hours)
+  diagnostic_frequency: 4   # Print diagnostics every 4 steps (2 hours)
+  max_checkpoints: 3
+

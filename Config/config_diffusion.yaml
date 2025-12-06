@@ -1,0 +1,24 @@
+# Configuration for Cubed-Sphere Thermal Diffusion (Parallelization Only)
+#
+# Note: Grid (N), diffusivity (κ), and time integration (days) remain as 
+#       command-line arguments. This config only controls parallelization.
+
+# Parallelization settings
+parallelization:
+  enable_sharding: true  # Set false for single-device optimization
+  tiles_per_edge: 1      # Tiles per cube edge (1 = 6 tiles total, 2 = 24 tiles, etc.)
+                         # Currently ONLY tiles_per_edge=1 is supported
+                         # Future: tiles_per_edge=2,3,4... for 100+ GPU scaling
+  device_type: 'cpu'     # 'cpu' or 'gpu'
+  num_devices: 6         # Number of devices (must evenly divide 6 * tiles_per_edge²)
+                         # Valid for tiles_per_edge=1: 1, 2, 3, 6 devices
+                         # JAX requires: num_tiles % num_devices == 0
+  
+  # When to use sharding:
+  #   - Multi-GPU systems (2-6 GPUs): TRUE - enables true parallelism
+  #   - Single GPU with large N (240+): TRUE - code portability worth overhead
+  #   - Single GPU with small N (<120): FALSE - 2x faster (use config_diffusion_no_sharding.yaml)
+  #
+  # For CPU testing: Uses XLA_FLAGS to create virtual devices
+  # For GPU testing: Configure device mesh on AWS instances
+

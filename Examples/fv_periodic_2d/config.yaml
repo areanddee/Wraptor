@@ -1,0 +1,40 @@
+# Configuration for 2D Periodic Shallow Water Example
+
+solver:
+  type: fv_torus_sw  # Registered name in Framework/runner.py
+
+physics:
+  gravity: 9.81        # [m/s²]
+  coriolis: 1.0e-4     # [rad/s] - Earth's rotation at mid-latitudes
+
+grid:
+  nx: 128              # Grid points in x
+  ny: 128              # Grid points in y
+
+domain:
+  Lx: 1.0e6            # Domain size in x [m] (1000 km)
+  Ly: 1.0e6            # Domain size in y [m] (1000 km)
+
+ic_params:
+  u_max: 20.0          # Maximum jet velocity [m/s]
+  h_mean: 1000.0       # Mean height [m]
+  perturbation: 10.0   # Perturbation amplitude [m]
+
+time_integration:
+  dt: 300              # Timestep [s] (5 min)
+  num_steps: 288       # Total steps (1 day)
+
+io:
+  output_dir: ./output_periodic_example
+  checkpoint_dir: ./checkpoints_periodic_example
+  output:
+    state:
+      frequency: 12    # Save every 12 steps (1 hour)
+      enabled: true
+    diagnostics:
+      frequency: 1     # Save every step
+      enabled: true
+  checkpoint_frequency: 100
+  diagnostic_frequency: 12  # Print diagnostics every hour
+  max_checkpoints: 3
+
