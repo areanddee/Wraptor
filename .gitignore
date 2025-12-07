@@ -41,6 +41,11 @@ output/
 *.mov
 frames/
 
+# Dev scratch outputs
+Dev/*/output*/
+Dev/*/*.png
+Dev/*/*.zarr/
+
 # Large data files
 *.zarr/
 *.nc

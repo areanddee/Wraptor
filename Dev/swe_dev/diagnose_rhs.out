@@ -1,0 +1,66 @@
+Loading solver and initializing...
+
+======================================================================
+LOADING SOLVER: fv_plr_cubesphere_swe
+======================================================================
+Pre-compiling halo exchange functions...
+  Stage 0: (0,N) ↔ (1,N) [R]
+  Stage 0: (3,E) ↔ (4,W) [N]
+  Stage 0: (2,S) ↔ (5,E) [TR]
+  Stage 1: (0,E) ↔ (4,N) [T]
+  Stage 1: (2,E) ↔ (3,W) [N]
+  Stage 1: (1,S) ↔ (5,N) [N]
+  Stage 2: (0,W) ↔ (2,N) [TR]
+  Stage 2: (1,W) ↔ (4,E) [N]
+  Stage 2: (3,S) ↔ (5,S) [R]
+  Stage 3: (0,S) ↔ (3,N) [N]
+  Stage 3: (1,E) ↔ (2,W) [N]
+  Stage 3: (4,S) ↔ (5,W) [T]
+JIT compiling composed exchange function...
+  ✓ Solver interface validated
+
+======================================================================
+INITIAL STATE DIAGNOSTICS
+======================================================================
+Resolution: N=30, dx=0.052360 rad = 333.6 km
+
+Depth field:
+  h: min=6026.07 m, max=7999.29 m, mean=7341.12 m
+
+Velocity field:
+  u1: min=1.4803 m/s, max=39.9928 m/s
+  u2: min=0.0000 m/s, max=0.0000 m/s
+  |u|_max: 39.9928 m/s
+
+Wave speeds:
+  c_gravity (√(gh)): 268.31 m/s
+  Total max speed: 308.30 m/s
+
+CFL analysis:
+  dt_cfl_max (dx/(c+u)): 1082.02 s (18.03 min)
+  Current dt: 3600 s
+  CFL number: 3.3271
+
+⚠️  WARNING: dt is 3.33x too large!
+  Recommend: dt ≤ 541 s (CFL ≤ 0.5)
+
+======================================================================
+SINGLE STEP TEST (dt=3600s)
+======================================================================
+
+Mass conservation:
+  Initial: 3.964205e+07
+  After 1 step: 3.964262e+07
+  Relative error: 1.442912e-05
+  ⚠️  Mass NOT conserved! (expect machine precision for steady state)
+
+Field changes after 1 step:
+  Δh: min=-4.915817e+07, max=4.915817e+07, rms=1.864889e+07
+  Δh/h: min=-6.696276e+03, max=6.696276e+03
+  ⚠️  Large change in h (>1% of mean)!
+
+======================================================================
+CONCLUSION
+======================================================================
+❌ Solver step function is BROKEN - mass not conserved and/or large spurious changes
+   → Check flux-form discretization and metric terms

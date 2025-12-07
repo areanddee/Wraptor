@@ -125,3 +125,39 @@ Reduce `--save-freq` for more frames, or increase `--fps`
 ### Colors washed out
 Try `--log-scale` for fields with large dynamic range, or set explicit `--vmin` and `--vmax`
 
+## Presentation Workflow
+
+1. **Preview run (fast check)**  
+   ```bash
+   python Analysis/visualize_sphere.py \
+       --solver diffusion \
+       --days 5 \
+       --N 60 \
+       --save-freq 12 \
+       --dpi 100 \
+       --nlat 120 --nlon 240 \
+       --fps 15
+   ```
+   - Low-resolution interpolant, shorter movie (~1.5 s), and bypasses heavy I/O.
+   - Use this step to verify viewpoint, colormap, and that halo exchange/PLR output looks reasonable.
+
+2. **Production movie (presentation-ready)**  
+   ```bash
+   python Analysis/visualize_sphere.py \
+       --solver diffusion \
+       --days 10 \
+       --N 120 \
+       --save-freq 6 \
+       --dpi 200 \
+       --nlat 360 --nlon 720 \
+       --fps 20
+   ```
+   - Skips the first frame automatically, so you never start on the “cold” snapshot.
+   - The ffmpeg call now forces even resolution (`scale=trunc(iw/2)*2:...`), so H.264 encoding succeeds.
+   - Playback file lives in `output/diffusion_movie.mp4` (or `advection_movie.mp4` for PLR).
+
+3. **Presentation checklist**  
+   - Confirm the color scale matches what you want (log vs linear, explicit vmin/vmax).  
+   - Check runtime stats printed during frame generation: color range, frame count, and estimated duration.  
+   - Describe the workflow on your slide: “Run solver → generate frames → ffmpeg movie” and mention the tool uses the solver’s geometry directly.
+

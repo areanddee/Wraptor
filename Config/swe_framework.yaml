@@ -1,0 +1,26 @@
+solver:
+  type: fv_plr_cubesphere_swe
+  N: 30
+physics:
+  R_sphere: 6.371e6
+  gravity: 9.80616
+  omega: 7.292115e-5
+  name: Earth
+initial_condition:
+  # solver uses steady geostrophic zonal flow by default
+time_integration:
+  dt: 500  # seconds (CFL-safe: ~0.46 for N=30)
+  num_steps: 0
+io:
+  output_dir: output/swe
+  checkpoint_dir: output/swe/checkpoints
+  diagnostic_frequency: 1
+  checkpoint_frequency: 100
+  output:
+    state:
+      enabled: true
+      frequency: 1
+    diagnostics:
+      enabled: true
+      frequency: 1
+

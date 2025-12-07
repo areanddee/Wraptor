@@ -57,7 +57,7 @@ def load_solver(config: Dict[str, Any]) -> NumericalSolver:
         'fv_plr_cubesphere_adv': ('fv_plr_cubesphere_adv', 'PLRCubeSphereAdvection', 'Solvers'),
         'fv_torus_sw': ('solver', 'FVPeriodic2D', 'Examples/fv_periodic_2d'),  # Example solver
         # Add new solvers here:
-        # 'fv_plr_cubesphere_swe': ('fv_plr_cubesphere_swe', 'ShallowWaterSolver', 'Solvers'),
+        'fv_plr_cubesphere_swe': ('fv_plr_cubesphere_swe', 'CubedSphereSWE', 'Solvers'),
     }
     
     if solver_type not in SOLVER_REGISTRY:
@@ -110,31 +110,72 @@ def instantiate_solver(solver_class, config: Dict[str, Any]):
     """
     # Try different initialization patterns
     
+    solver_config = config['solver']
+    N = solver_config.get('N', 60)
+    solver_type = solver_config.get('type', '')
+    
+    errors = []  # Track all errors for debugging
+
     # Pattern 1: Just config
     try:
         return solver_class(config=config)
-    except TypeError:
-        pass
+    except TypeError as e:
+        errors.append(f"Pattern 1 (config only): {e}")
+    except Exception as e:
+        # Non-TypeError exceptions are real errors, not signature mismatches
+        raise ValueError(
+            f"Failed to instantiate {solver_class.__name__} with config-only pattern.\n"
+            f"Error: {e}"
+        )
     
-    # Pattern 2: Specific parameters from config (legacy solvers)
+    # Pattern 2: Modern solvers (N, config)
     try:
-        solver_config = config['solver']
-        N = solver_config.get('N', 60)
-        
-        # Check if this is diffusion solver (needs kappa)
-        if 'kappa' in solver_config:
+        return solver_class(N=N, config=config)
+    except TypeError as e:
+        errors.append(f"Pattern 2 (N, config): {e}")
+    except Exception as e:
+        # Non-TypeError exceptions are real errors
+        raise ValueError(
+            f"Failed to instantiate {solver_class.__name__} with (N, config) pattern.\n"
+            f"Error: {e}"
+        )
+
+    # Pattern 3: Legacy diffusion solver (N, kappa, config_file)
+    if 'kappa' in solver_config:
+        try:
             kappa = solver_config['kappa']
             config_file = config.get('_config_file_path', None)
             return solver_class(N=N, kappa=kappa, config_file=config_file)
-        else:
-            # Advection solver (just N and config file)
-            config_file = config.get('_config_file_path', None)
-            return solver_class(N=N, config_file=config_file)
+        except TypeError as e:
+            errors.append(f"Pattern 3 (N, kappa, config_file): {e}")
+        except Exception as e:
+            raise ValueError(
+                f"Failed to instantiate {solver_class.__name__} with legacy diffusion pattern.\n"
+                f"Error: {e}"
+            )
+    
+    # Pattern 4: Legacy advection solver (N, config_file)
+    try:
+        config_file = config.get('_config_file_path', None)
+        return solver_class(N=N, config_file=config_file)
+    except TypeError as e:
+        errors.append(f"Pattern 4 (N, config_file): {e}")
     except Exception as e:
         raise ValueError(
-            f"Failed to instantiate {solver_class.__name__}: {e}\n"
-            f"Check solver's __init__ signature"
+            f"Failed to instantiate {solver_class.__name__} with legacy advection pattern.\n"
+            f"Error: {e}"
         )
+    
+    # If we got here, all patterns failed
+    raise ValueError(
+        f"Failed to instantiate {solver_class.__name__} with any known pattern.\n"
+        f"Tried patterns:\n" + "\n".join(f"  - {err}" for err in errors) +
+        f"\n\nCheck solver's __init__ signature and ensure it matches one of:\n"
+        f"  - (config)\n"
+        f"  - (N, config)\n"
+        f"  - (N, kappa, config_file) [diffusion]\n"
+        f"  - (N, config_file) [advection]"
+    )
 
 
 # ============================================================================

@@ -1,0 +1,84 @@
+Loading solver and initializing...
+
+
+======================================================================
+LOADING SOLVER: fv_plr_cubesphere_swe
+======================================================================
+Pre-compiling halo exchange functions...
+  Stage 0: (0,N) ↔ (1,N) [R]
+  Stage 0: (3,E) ↔ (4,W) [N]
+  Stage 0: (2,S) ↔ (5,E) [TR]
+  Stage 1: (0,E) ↔ (4,N) [T]
+  Stage 1: (2,E) ↔ (3,W) [N]
+  Stage 1: (1,S) ↔ (5,N) [N]
+  Stage 2: (0,W) ↔ (2,N) [TR]
+  Stage 2: (1,W) ↔ (4,E) [N]
+  Stage 2: (3,S) ↔ (5,S) [R]
+  Stage 3: (0,S) ↔ (3,N) [N]
+  Stage 3: (1,E) ↔ (2,W) [N]
+  Stage 3: (4,S) ↔ (5,W) [T]
+JIT compiling composed exchange function...
+  ✓ Solver interface validated
+======================================================================
+INITIAL STATE
+======================================================================
+h:   min=6026.07, max=7999.29, mean=7341.12 m
+u1:  min=1.4803, max=39.9928 m/s
+u2:  min=0.000000, max=0.000000 m/s (should be ~0)
+hu1: min=8920.28, max=319913.78
+hu2: min=0.000000, max=0.000000 (should be ~0)
+
+======================================================================
+CURRENT STEP FUNCTION COMPUTATION
+======================================================================
+
+Using dt=1.0s (to see raw tendency magnitudes):
+
+Δh (from jnp.gradient):
+  min=-1.365505e+04, max=1.365505e+04, rms=5.180248e+03
+
+Δhu1 (from jnp.gradient):
+  min=-7.613632e+06, max=7.613632e+06, rms=2.536818e+06
+
+Δhu2 (from jnp.gradient) - SHOULD BE ZERO:
+  min=-7.177840e+06, max=7.177840e+06, rms=4.529492e+06
+  ❌ hu2 tendency is NOT zero! Something is wrong.
+
+======================================================================
+DEBUGGING INDIVIDUAL TERMS
+======================================================================
+
+∂(hu1)/∂ξ1 (axis=1 gradient of hu1):
+  min=-1.365505e+04, max=1.365505e+04
+
+∂(hu2)/∂ξ2 (axis=2 gradient of hu2):
+  min=0.000000e+00, max=0.000000e+00
+  NOTE: Since hu2=0 everywhere, this should be ~0
+
+Flux term 1 (hu1*u1 + 0.5*g*h²):
+  min=1.780613e+08, max=3.265354e+08
+
+Flux term 2 (hu2*u2 + 0.5*g*h²):
+  min=1.780481e+08, max=3.137412e+08
+  NOTE: Since u2=0, this is just 0.5*g*h²
+
+∂(flux_term_2)/∂ξ2:
+  min=-7.177840e+06, max=7.177840e+06
+  This is ∂(0.5*g*h²)/∂ξ2 - the pressure gradient in the meridional direction
+
+======================================================================
+KEY ISSUES IDENTIFIED
+======================================================================
+1. jnp.gradient() uses INDEX spacing (Δξ=1) not PHYSICAL spacing
+   → Need to divide by dx (in radians) then multiply by R to get physical units
+   → dx = 0.052360 rad, R = 6371000 m
+   → Scale factor: 1/(R*dx) = 2.997739e-06
+
+2. No metric terms (√G) for flux-form discretization
+   → Need ∂(F√G)/∂ξ / √G for proper conservative form
+
+3. No halo exchange - gradients at face boundaries are WRONG
+
+4. Pressure gradient in meridional direction is NON-ZERO
+   → This will drive spurious meridional flow even though u2=0 initially
+   → Need ∂(0.5*g*h²)/∂ξ2 = g*h*∂h/∂ξ2, which is NOT zero on the sphere!
