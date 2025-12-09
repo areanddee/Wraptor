@@ -1,18 +1,82 @@
-# JaxStream2 - JAX-based Atmospheric Solver Framework
+# Wraptor - JAX-based Atmospheric Solver Framework
 
 **Production-ready cubed-sphere atmospheric dynamics solvers with JAX sharding support.**
 
-## Quick Start
+---
+
+## Installation
+
+### Requirements
+- Python 3.10 or higher
+- macOS, Linux, or Windows (WSL2)
+
+### Step 1: Clone the Repository
 
 ```bash
-# Run Framework with diffusion solver
-python -m Framework.runner Config/diffusion_framework.yaml
+git clone <repository-url>
+cd Wraptor
+```
 
-# Run Framework with advection solver
-python -m Framework.runner Config/advection_framework.yaml
+### Step 2: Create Python Environment
 
-# Run tests
+**Using venv (recommended):**
+```bash
+python3.10 -m venv wraptor_env
+source wraptor_env/bin/activate  # On Windows: wraptor_env\Scripts\activate
+```
+
+**Or using conda:**
+```bash
+conda create -n wraptor python=3.10
+conda activate wraptor
+```
+
+### Step 3: Install Dependencies
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+**For GPU support** (optional, requires CUDA-compatible GPU):
+```bash
+pip install "jax[cuda12]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+```
+
+### Step 4: Verify Installation
+
+```bash
+# Quick verification (runs in ~30 seconds)
 python Tests/run_all_tests.py
+
+# If successful, you should see:
+# ✅ Test suite complete!
+# All 4 tests passed
+```
+
+---
+
+## Quick Start
+
+### Run Your First Simulation
+
+**Thermal Diffusion (Lima Flag test):**
+```bash
+python -m Framework.runner Config/diffusion_framework.yaml
+```
+
+**Scalar Advection (Cosine Bell test):**
+```bash
+python -m Framework.runner Config/advection_framework.yaml
+```
+
+**View outputs:**
+```bash
+# Output is saved as Zarr arrays in output/
+ls output/output.zarr/
+
+# Visualize (requires matplotlib)
+python Analysis/visualize_sphere.py output/output.zarr
 ```
 
 ---
@@ -210,6 +274,69 @@ SOLVER_REGISTRY = {
 
 ---
 
-**Version:** 2.0  
+## Troubleshooting
+
+### ImportError: No module named 'jax'
+- Make sure your virtual environment is activated
+- Re-run: `pip install -r requirements.txt`
+
+### JAX not detecting GPU
+```bash
+# Check JAX installation
+python -c "import jax; print(jax.devices())"
+
+# Should show [CudaDevice(id=0)] for GPU
+# Shows [CpuDevice(id=0)] for CPU-only
+
+# Reinstall with CUDA support
+pip uninstall jax jaxlib
+pip install "jax[cuda12]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+```
+
+### Tests failing
+```bash
+# Clean up any corrupted output
+rm -rf output/ Tests/output*/
+
+# Run single test for debugging
+python Tests/test_solvers.py -v
+```
+
+### Out of memory
+- Reduce grid resolution (`N`) in config files
+- Reduce number of timesteps
+- Disable state history output (keep only diagnostics)
+
+---
+
+## Contributing
+
+See `Dev/README.md` for development workflow and coding standards.
+
+---
+
+## License
+
+[Add license information]
+
+---
+
+## Citation
+
+If you use this code in your research, please cite:
+
+```
+[Add citation information]
+```
+
+---
+
+## Changelog
+
+See `CHANGELOG.md` for version history.
+
+---
+
+**Version:** v0.3.0-alpha  
 **Date:** December 2024  
-**Status:** Production-ready ✅
+**Status:** Framework production-ready ✅ | SWE solver needs tensor formulation fix ⚠️

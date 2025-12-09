@@ -1,0 +1,79 @@
+Loading solver and initializing...
+
+======================================================================
+LOADING SOLVER: fv_plr_cubesphere_swe
+======================================================================
+Pre-compiling halo exchange functions...
+  Stage 0: (0,N) ↔ (1,N) [R]
+  Stage 0: (3,E) ↔ (4,W) [N]
+  Stage 0: (2,S) ↔ (5,E) [TR]
+  Stage 1: (0,E) ↔ (4,N) [T]
+  Stage 1: (2,E) ↔ (3,W) [N]
+  Stage 1: (1,S) ↔ (5,N) [N]
+  Stage 2: (0,W) ↔ (2,N) [TR]
+  Stage 2: (1,W) ↔ (4,E) [N]
+  Stage 2: (3,S) ↔ (5,S) [R]
+  Stage 3: (0,S) ↔ (3,N) [N]
+  Stage 3: (1,E) ↔ (2,W) [N]
+  Stage 3: (4,S) ↔ (5,W) [T]
+JIT compiling composed exchange function...
+  ✓ Solver interface validated
+
+======================================================================
+INITIAL STATE (t=0)
+======================================================================
+  Mass:          2.153556e+09
+  Kinetic:       1.189797e+12
+  Geopotential:  7.801482e+13
+  Total Energy:  7.920461e+13
+
+======================================================================
+TAKING 5 STEPS (dt=500s)
+======================================================================
+
+Step 1 (t=500s):
+  Mass:          2.153455e+09  (error: 4.659828e-05)
+  Kinetic:       1.193437e+12
+  Geopotential:  7.800664e+13
+  Total Energy:  7.920008e+13  (error: 5.730425e-05)
+
+Step 2 (t=1000s):
+  Mass:          2.153196e+09  (error: 1.668979e-04)
+  Kinetic:       1.204616e+12
+  Geopotential:  7.798563e+13
+  Total Energy:  7.919025e+13  (error: 1.813702e-04)
+
+Step 3 (t=1500s):
+  Mass:          2.152891e+09  (error: 3.084759e-04)
+  Kinetic:       1.270198e+12
+  Geopotential:  7.797625e+13
+  Total Energy:  7.924644e+13  (error: 5.281199e-04)
+
+Step 4 (t=2000s):
+  Mass:          2.153981e+09  (error: 1.974483e-04)
+  Kinetic:       2.566206e+14
+  Geopotential:  3.040264e+16
+  Total Energy:  3.065926e+16  (error: 3.860893e+02)
+  ⚠️  Energy error > 1%!
+
+Step 5 (t=2500s):
+  Mass:          -1.194579e+15  (error: 5.547018e+05)
+  Kinetic:       5.240173e+34
+  Geopotential:  inf
+  Total Energy:  inf  (error: inf)
+  ⚠️  Mass error > 1%!
+  ⚠️  Energy error > 1%!
+
+======================================================================
+FINAL FIELD RANGES
+======================================================================
+  h:   min=-17905796447471665152.00 m, max=18664603506660343808.00 m
+  hu1: min=-28303545020253384434778112.00, max=40713795010026296089509888.00
+  hu2: min=-16520529292925277202022400.00, max=16674692191913781745418240.00
+
+❌ NEGATIVE DEPTH!
+
+======================================================================
+VERDICT
+======================================================================
+❌ Poor conservation - solver needs work

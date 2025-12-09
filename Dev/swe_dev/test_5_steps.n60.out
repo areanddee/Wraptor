@@ -1,0 +1,74 @@
+Loading solver and initializing...
+
+======================================================================
+LOADING SOLVER: fv_plr_cubesphere_swe
+======================================================================
+Pre-compiling halo exchange functions...
+  Stage 0: (0,N) ↔ (1,N) [R]
+  Stage 0: (3,E) ↔ (4,W) [N]
+  Stage 0: (2,S) ↔ (5,E) [TR]
+  Stage 1: (0,E) ↔ (4,N) [T]
+  Stage 1: (2,E) ↔ (3,W) [N]
+  Stage 1: (1,S) ↔ (5,N) [N]
+  Stage 2: (0,W) ↔ (2,N) [TR]
+  Stage 2: (1,W) ↔ (4,E) [N]
+  Stage 2: (3,S) ↔ (5,S) [R]
+  Stage 3: (0,S) ↔ (3,N) [N]
+  Stage 3: (1,E) ↔ (2,W) [N]
+  Stage 3: (4,S) ↔ (5,W) [T]
+JIT compiling composed exchange function...
+  ✓ Solver interface validated
+
+======================================================================
+INITIAL STATE (t=0)
+======================================================================
+  Mass:          1.346025e+08
+  Kinetic:       7.436521e+10
+  Geopotential:  4.876114e+12
+  Total Energy:  4.950480e+12
+
+======================================================================
+TAKING 5 STEPS (dt=500s)
+======================================================================
+
+Step 1 (t=500s):
+  Mass:          1.345969e+08  (error: 4.172285e-05)
+  Kinetic:       7.458964e+10
+  Geopotential:  4.875642e+12
+  Total Energy:  4.950232e+12  (error: 5.008550e-05)
+
+Step 2 (t=1000s):
+  Mass:          1.345799e+08  (error: 1.678424e-04)
+  Kinetic:       7.521930e+10
+  Geopotential:  4.874242e+12
+  Total Energy:  4.949461e+12  (error: 2.056638e-04)
+
+Step 3 (t=1500s):
+  Mass:          1.345517e+08  (error: 3.774076e-04)
+  Kinetic:       7.620927e+10
+  Geopotential:  4.871933e+12
+  Total Energy:  4.948142e+12  (error: 4.722073e-04)
+
+Step 4 (t=2000s):
+  Mass:          1.345152e+08  (error: 6.485467e-04)
+  Kinetic:       7.750439e+10
+  Geopotential:  4.868972e+12
+  Total Energy:  4.946477e+12  (error: 8.085416e-04)
+
+Step 5 (t=2500s):
+  Mass:          1.344729e+08  (error: 9.627162e-04)
+  Kinetic:       7.906609e+10
+  Geopotential:  4.865563e+12
+  Total Energy:  4.944629e+12  (error: 1.181893e-03)
+
+======================================================================
+FINAL FIELD RANGES
+======================================================================
+  h:   min=5978.75 m, max=8291.88 m
+  hu1: min=17445.44, max=415510.53
+  hu2: min=-127987.08, max=179201.72
+
+======================================================================
+VERDICT
+======================================================================
+⚠️  Acceptable but not great

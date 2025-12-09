@@ -1,0 +1,30 @@
+Step 1 (t=500s):
+  Mass:          3.365366e+07  (error: 3.482412e-05)
+  Kinetic:       1.865030e+10
+  Geopotential:  1.219077e+12
+  Total Energy:  1.237727e+12  (error: 4.001600e-05)
+
+Step 2 (t=1000s):
+  Mass:          3.364976e+07  (error: 1.508253e-04)
+  Kinetic:       1.880481e+10
+  Geopotential:  1.218747e+12
+  Total Energy:  1.237552e+12  (error: 1.819326e-04)
+
+Step 3 (t=1500s):
+  Mass:          3.364325e+07  (error: 3.442002e-04)
+  Kinetic:       1.905033e+10
+  Geopotential:  1.218206e+12
+  Total Energy:  1.237256e+12  (error: 4.204948e-04)
+
+Step 4 (t=2000s):
+  Mass:          3.363432e+07  (error: 6.094816e-04)
+  Kinetic:       1.937694e+10
+  Geopotential:  1.217469e+12
+  Total Energy:  1.236846e+12  (error: 7.521668e-04)
+
+Step 5 (t=2500s):
+  Mass:          3.362317e+07  (error: 9.407267e-04)
+  Kinetic:       1.977083e+10
+  Geopotential:  1.216559e+12
+  Total Energy:  1.236330e+12  (error: 1.169157e-03)
+

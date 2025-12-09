@@ -2,7 +2,7 @@ solver:
   type: fv_plr_cubesphere_swe
   N: 30
 physics:
-  R_sphere: 6.371e6
+  R_sphere: 6.371e+6
   gravity: 9.80616
   omega: 7.292115e-5
   name: Earth

@@ -1,5 +1,33 @@
 # Wraptor Changelog
 
+## v0.3.0-alpha - FV-PLR RK3 SWE Prototype (2024-12-08)
+
+### SWE Solver Implementation
+- ✅ Proper FV-PLR with MC limiter (2nd order spatial reconstruction)
+- ✅ RK3 time integration (3rd order temporal accuracy)
+- ✅ Conservative flux-form discretization
+- ✅ Full metric terms (√G) in all fluxes
+- ✅ Upwind flux selection for stability
+- ✅ Stable for 3600+ timesteps (1+ hours integration)
+- ✅ ~0.5% mass/energy conservation
+
+### Known Issues - Tensor Formulation
+- ❌ **Covariant vs contravariant confusion** (mixing `u_i` and `u^i`)
+- ❌ **Coriolis term incorrectly formulated** (naive `f·hu²` instead of Bernoulli form)
+- ❌ **Test Case 2 errors increase with refinement** (formulation bug, not discretization)
+- ⚠️  Needs proper `G_{ij}` metric tensor and Nair et al. (2005) formulation
+
+### Test Results
+- Convergence study shows divergence (errors grow with N)
+- Root cause: incorrect tensor index handling
+- See `Dev/swe_status.md` for full analysis
+
+### Path Forward
+- Implement proper covariant/contravariant transformations
+- Add `G_{ij}` metric tensor for equiangular cubed sphere
+- Rewrite momentum equations in Bernoulli form with vorticity
+- Estimated 4-6 hours for proper implementation
+
 ## v0.2.0 - Framework Refactor & SWE Prototype (2024-12-07)
 
 ### Framework
