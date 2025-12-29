@@ -1,0 +1,29 @@
+# Wraptor - ARCC H100 Cluster Requirements
+# Tested on mbh100 nodes with Python 3.9.21
+
+# Core dependencies
+jax[cuda12_pip]>=0.4.30  # Bundled CUDA for ARCC systems
+numpy>=1.24.0
+flax>=0.8.0
+
+# I/O and configuration  
+zarr>=2.16.0
+orbax-checkpoint>=0.5.0
+pyyaml>=6.0.0
+
+# Visualization
+matplotlib>=3.7.0
+scipy>=1.11.0
+
+# Testing (optional)
+pytest>=7.4.0
+pytest-xdist>=3.3.0
+
+# ARCC-specific notes:
+# - Use jax[cuda12_pip] which bundles CUDA toolkit
+# - Set: export LD_LIBRARY_PATH=/usr/lib64:$LD_LIBRARY_PATH
+# - Set: export JAX_PLATFORMS=cuda
+# - nvidia-smi shows H100 80GB with CUDA 12.8 driver
+
+
+
