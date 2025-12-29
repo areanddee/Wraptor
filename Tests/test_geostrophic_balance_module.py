@@ -44,6 +44,12 @@ def parse_args():
                         help='Single resolution (overrides --resolutions)')
     parser.add_argument('--resolutions', type=str, default='15,30,60',
                         help='Comma-separated resolutions for convergence study')
+    parser.add_argument('--benchmark', action='store_true',
+                        help='Run benchmark mode with warmup and averaged timing')
+    parser.add_argument('--iterations', type=int, default=10,
+                        help='Number of timed iterations for benchmark mode')
+    parser.add_argument('--warmup', type=int, default=2,
+                        help='Number of warmup iterations for benchmark mode')
     return parser.parse_args()
 
 
@@ -474,11 +480,239 @@ def run_convergence_study(resolutions: list, sharding=None):
 
 
 # =============================================================================
+# BENCHMARK MODE
+# =============================================================================
+
+def run_benchmark(N: int, iterations: int = 10, warmup: int = 2, sharding=None):
+    """
+    Run benchmark with warmup and averaged timing.
+    
+    Separates JIT compilation from actual execution time.
+    Reports throughput in cells/second.
+    
+    Args:
+        N: Grid resolution
+        iterations: Number of timed iterations
+        warmup: Number of warmup iterations (for JIT)
+        sharding: Optional JAX sharding
+    """
+    print(f"\n{'='*70}")
+    print(f"BENCHMARK MODE")
+    print(f"  N={N}, Warmup={warmup}, Iterations={iterations}")
+    print(f"  Precision: {args.precision}, Device: {args.device}")
+    print(f"{'='*70}")
+    
+    total_cells = 6 * N * N
+    print(f"\n  Grid: 6 × {N} × {N} = {total_cells:,} cells")
+    
+    # ========================================================================
+    # SETUP (one-time)
+    # ========================================================================
+    print(f"\n  Setting up...")
+    t_setup_start = time.perf_counter()
+    
+    geom = CubedSphereGeometry.create(N)
+    planet = PlanetParams()
+    
+    R = planet.R_sphere
+    g = planet.gravity
+    omega = planet.omega
+    dx = geom.dx
+    h0, u0 = 8000.0, 40.0
+    
+    # Initial conditions
+    h, u_lon, u_lat = steady_geostrophic_flow(geom, planet, h0=h0, u0=u0)
+    h = jnp.array(h)
+    u_lon = jnp.array(u_lon)
+    u_lat = jnp.array(u_lat)
+    
+    lat, lon = geom.get_lat_lon_all_faces()
+    lat = jnp.array(lat)
+    lon = jnp.array(lon)
+    
+    XI1 = jnp.array(geom.XI1)
+    XI2 = jnp.array(geom.XI2)
+    sqrtG = jnp.array(geom.sqrtG)
+    
+    # Convert to Cartesian
+    Vx_all = jnp.zeros((6, N, N))
+    Vy_all = jnp.zeros((6, N, N))
+    Vz_all = jnp.zeros((6, N, N))
+    X_all = jnp.zeros((6, N, N))
+    Y_all = jnp.zeros((6, N, N))
+    Z_all = jnp.zeros((6, N, N))
+    
+    for face in range(6):
+        Vx, Vy, Vz = spherical_to_cartesian_velocity(
+            u_lon[face], u_lat[face], lon[face], lat[face]
+        )
+        Vx_all = Vx_all.at[face].set(Vx)
+        Vy_all = Vy_all.at[face].set(Vy)
+        Vz_all = Vz_all.at[face].set(Vz)
+        
+        X, Y, Z = geom.xi_to_xyz(XI1, XI2, face)
+        X_all = X_all.at[face].set(X * R)
+        Y_all = Y_all.at[face].set(Y * R)
+        Z_all = Z_all.at[face].set(Z * R)
+    
+    # Bernoulli function
+    B = g * h + 0.5 * (Vx_all**2 + Vy_all**2 + Vz_all**2)
+    
+    # Apply sharding
+    if sharding is not None:
+        B = jax.device_put(B, sharding)
+        lat = jax.device_put(lat, sharding)
+        Vx_all = jax.device_put(Vx_all, sharding)
+        Vy_all = jax.device_put(Vy_all, sharding)
+        Vz_all = jax.device_put(Vz_all, sharding)
+        sqrtG = jax.device_put(sqrtG, sharding)
+    
+    t_setup = time.perf_counter() - t_setup_start
+    print(f"  Setup complete: {t_setup*1000:.1f} ms")
+    
+    # ========================================================================
+    # CREATE JIT-COMPILED FUNCTIONS
+    # ========================================================================
+    print(f"\n  Creating JIT-compiled functions...")
+    
+    # Gradient function
+    t_jit_start = time.perf_counter()
+    gradient_fn = make_gradient_fn(N, float(dx), XI1, XI2, R)
+    
+    # Vorticity function (JIT compile a version that handles all faces)
+    @jax.jit
+    def compute_vorticity_all_faces(Vx_all, Vy_all, Vz_all, sqrtG, lat):
+        """Compute vorticity for all 6 faces."""
+        jacobian_terms_unit = compute_jacobian_terms(XI1, XI2, R=1.0)
+        
+        eta_all = jnp.zeros((6, N, N))
+        for face in range(6):
+            J11, J12, J21, J22, J31, J32 = get_jacobian_for_face(jacobian_terms_unit, face)
+            
+            V1_cov = J11 * Vx_all[face] + J21 * Vy_all[face] + J31 * Vz_all[face]
+            V2_cov = J12 * Vx_all[face] + J22 * Vy_all[face] + J32 * Vz_all[face]
+            
+            dV2_dxi1, _ = compute_slopes_fv3(V2_cov, dx, N)
+            _, dV1_dxi2 = compute_slopes_fv3(V1_cov, dx, N)
+            
+            zeta = (dV2_dxi1 - dV1_dxi2) / (sqrtG[face] * R)
+            f = 2.0 * omega * jnp.sin(lat[face])
+            eta_all = eta_all.at[face].set(zeta + f)
+        
+        return eta_all
+    
+    t_jit = time.perf_counter() - t_jit_start
+    print(f"  JIT function creation: {t_jit*1000:.1f} ms")
+    
+    # ========================================================================
+    # WARMUP (triggers JIT compilation)
+    # ========================================================================
+    print(f"\n  Warming up ({warmup} iterations)...")
+    t_warmup_start = time.perf_counter()
+    
+    for i in range(warmup):
+        dB_dX, dB_dY, dB_dZ = gradient_fn(B)
+        eta_all = compute_vorticity_all_faces(Vx_all, Vy_all, Vz_all, sqrtG, lat)
+        jax.block_until_ready(dB_dX)
+        jax.block_until_ready(eta_all)
+    
+    t_warmup = time.perf_counter() - t_warmup_start
+    print(f"  Warmup complete: {t_warmup*1000:.1f} ms ({t_warmup/warmup*1000:.1f} ms/iter)")
+    
+    # ========================================================================
+    # TIMED ITERATIONS
+    # ========================================================================
+    print(f"\n  Running {iterations} timed iterations...")
+    
+    # Time gradient separately
+    grad_times = []
+    for i in range(iterations):
+        t0 = time.perf_counter()
+        dB_dX, dB_dY, dB_dZ = gradient_fn(B)
+        jax.block_until_ready(dB_dX)
+        grad_times.append(time.perf_counter() - t0)
+    
+    # Time vorticity separately
+    vort_times = []
+    for i in range(iterations):
+        t0 = time.perf_counter()
+        eta_all = compute_vorticity_all_faces(Vx_all, Vy_all, Vz_all, sqrtG, lat)
+        jax.block_until_ready(eta_all)
+        vort_times.append(time.perf_counter() - t0)
+    
+    # Time combined (as would be in actual solver)
+    combined_times = []
+    for i in range(iterations):
+        t0 = time.perf_counter()
+        dB_dX, dB_dY, dB_dZ = gradient_fn(B)
+        eta_all = compute_vorticity_all_faces(Vx_all, Vy_all, Vz_all, sqrtG, lat)
+        jax.block_until_ready(dB_dX)
+        jax.block_until_ready(eta_all)
+        combined_times.append(time.perf_counter() - t0)
+    
+    # Convert to numpy for stats
+    grad_times = np.array(grad_times) * 1000  # ms
+    vort_times = np.array(vort_times) * 1000
+    combined_times = np.array(combined_times) * 1000
+    
+    # ========================================================================
+    # RESULTS
+    # ========================================================================
+    print(f"\n{'='*70}")
+    print("BENCHMARK RESULTS")
+    print(f"{'='*70}")
+    
+    print(f"\n  Timing (ms) over {iterations} iterations:")
+    print(f"    {'Operation':<20} {'Mean':>10} {'Std':>10} {'Min':>10} {'Max':>10}")
+    print(f"    {'-'*60}")
+    print(f"    {'Gradient':<20} {grad_times.mean():>10.2f} {grad_times.std():>10.2f} {grad_times.min():>10.2f} {grad_times.max():>10.2f}")
+    print(f"    {'Vorticity':<20} {vort_times.mean():>10.2f} {vort_times.std():>10.2f} {vort_times.min():>10.2f} {vort_times.max():>10.2f}")
+    print(f"    {'Combined':<20} {combined_times.mean():>10.2f} {combined_times.std():>10.2f} {combined_times.min():>10.2f} {combined_times.max():>10.2f}")
+    
+    # Throughput
+    grad_throughput = total_cells / (grad_times.mean() / 1000)
+    vort_throughput = total_cells / (vort_times.mean() / 1000)
+    combined_throughput = total_cells / (combined_times.mean() / 1000)
+    
+    print(f"\n  Throughput (cells/second):")
+    print(f"    {'Operation':<20} {'Throughput':>15}")
+    print(f"    {'-'*35}")
+    print(f"    {'Gradient':<20} {grad_throughput:>15.2e}")
+    print(f"    {'Vorticity':<20} {vort_throughput:>15.2e}")
+    print(f"    {'Combined':<20} {combined_throughput:>15.2e}")
+    
+    # Comparison with JIT overhead
+    print(f"\n  JIT Compilation Overhead:")
+    print(f"    First call (warmup): {t_warmup/warmup*1000:.1f} ms")
+    print(f"    After warmup:        {combined_times.mean():.1f} ms")
+    print(f"    Speedup:             {(t_warmup/warmup*1000) / combined_times.mean():.1f}x")
+    
+    return {
+        'N': N,
+        'total_cells': total_cells,
+        'grad_mean_ms': float(grad_times.mean()),
+        'grad_std_ms': float(grad_times.std()),
+        'vort_mean_ms': float(vort_times.mean()),
+        'vort_std_ms': float(vort_times.std()),
+        'combined_mean_ms': float(combined_times.mean()),
+        'combined_std_ms': float(combined_times.std()),
+        'grad_throughput': grad_throughput,
+        'vort_throughput': vort_throughput,
+        'combined_throughput': combined_throughput,
+    }
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
 if __name__ == "__main__":
-    if args.N is not None:
+    if args.benchmark:
+        if args.N is None:
+            print("ERROR: --benchmark requires --N to specify resolution")
+            sys.exit(1)
+        run_benchmark(args.N, iterations=args.iterations, warmup=args.warmup, sharding=sharding)
+    elif args.N is not None:
         test_geostrophic_balance(args.N, sharding=sharding)
     else:
         resolutions = [int(n) for n in args.resolutions.split(',')]
